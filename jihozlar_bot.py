@@ -2,8 +2,7 @@
 Jihozlar katalogi - Telegram bot
 =================================
 Rasm (foto) + tavsif yuborsangiz, bot saqlab qoladi.
-Keyin /qidir buyrug'i bilan nom yoki tavsif bo'yicha qidirishingiz mumkin.
-Bu versiyada barcha foydalanuvchilar bitta umumiy ro'yxatni ko'radi va qidiradi.
+Faqat admin yangi jihoz qo'sha oladi, boshqalar faqat qidiradi.
 """
 
 import os
@@ -23,6 +22,9 @@ from telegram.ext import (
 # ============ SOZLAMALAR ============
 BOT_TOKEN = os.environ.get("BOT_TOKEN", "BU_YERGA_TOKENINGIZNI_YOZING")
 DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "jihozlar.db")
+
+# Faqat shu ID'dagi foydalanuvchi jihoz qo'sha oladi/o'chira oladi
+ADMIN_IDS = [7726996138]
 
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
@@ -110,9 +112,16 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    if user_id not in ADMIN_IDS:
+        await update.message.reply_text(
+            "Kechirasiz, faqat admin yangi jihoz qo'sha oladi. "
+            "Siz /qidir orqali qidirishingiz mumkin."
+        )
+        return
+
     photo = update.message.photo[-1]
     caption = update.message.caption or ""
-    user_id = update.effective_user.id
 
     item_id = add_item(photo.file_id, caption, user_id)
 
@@ -156,6 +165,11 @@ async def royxat(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def ochir(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    if user_id not in ADMIN_IDS:
+        await update.message.reply_text("Kechirasiz, faqat admin yozuvlarni o'chira oladi.")
+        return
+
     if not context.args or not context.args[0].isdigit():
         await update.message.reply_text("ID raqamini yozing. Masalan: /ochir 5")
         return
