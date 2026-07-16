@@ -3,24 +3,7 @@ Jihozlar katalogi - Telegram bot
 =================================
 Rasm (foto) + tavsif yuborsangiz, bot saqlab qoladi.
 Keyin /qidir buyrug'i bilan nom yoki tavsif bo'yicha qidirishingiz mumkin.
-
-O'RNATISH:
-1. Python 3.10+ o'rnatilgan bo'lishi kerak.
-2. Terminalda:
-       pip install python-telegram-bot==21.4
-3. @BotFather orqali yangi bot yarating va tokenni oling.
-4. Quyida BOT_TOKEN = "..." qatoriga o'sha tokenni yozing
-   (yoki BOT_TOKEN nomli environment variable qilib bering).
-5. Ishga tushirish:
-       python jihozlar_bot.py
-
-FOYDALANISH:
-- Botga rasm yuboring, rasm ostiga (caption) jihoz nomi va ma'lumotini yozing.
-  Masalan: "Perforator Bosch GBH 2-26, seriya №4521, 2023-yilda olingan"
-- /qidir <so'z>  -> shu so'z caption ichida uchraydigan barcha jihozlarni topib beradi
-  Masalan: /qidir Bosch
-- /royxat -> barcha saqlangan jihozlar sonini va oxirgi qo'shilganlarini ko'rsatadi
-- /ochir <id> -> berilgan ID'dagi yozuvni o'chiradi (ID /qidir yoki /royxat natijasida ko'rinadi)
+Bu versiyada barcha foydalanuvchilar bitta umumiy ro'yxatni ko'radi va qidiradi.
 """
 
 import os
@@ -80,37 +63,37 @@ def add_item(file_id: str, caption: str, user_id: int) -> int:
     return new_id
 
 
-def search_items(query: str, user_id: int):
+def search_items(query: str):
     conn = sqlite3.connect(DB_PATH)
     cur = conn.cursor()
     cur.execute(
         "SELECT id, file_id, caption, created_at FROM jihozlar "
-        "WHERE user_id = ? AND caption LIKE ? ORDER BY id DESC",
-        (user_id, f"%{query}%"),
+        "WHERE caption LIKE ? ORDER BY id DESC",
+        (f"%{query}%",),
     )
     rows = cur.fetchall()
     conn.close()
     return rows
 
 
-def list_items(user_id: int, limit: int = 10):
+def list_items(limit: int = 10):
     conn = sqlite3.connect(DB_PATH)
     cur = conn.cursor()
     cur.execute(
-        "SELECT id, caption, created_at FROM jihozlar WHERE user_id = ? ORDER BY id DESC LIMIT ?",
-        (user_id, limit),
+        "SELECT id, caption, created_at FROM jihozlar ORDER BY id DESC LIMIT ?",
+        (limit,),
     )
     rows = cur.fetchall()
-    cur.execute("SELECT COUNT(*) FROM jihozlar WHERE user_id = ?", (user_id,))
+    cur.execute("SELECT COUNT(*) FROM jihozlar")
     total = cur.fetchone()[0]
     conn.close()
     return rows, total
 
 
-def delete_item(item_id: int, user_id: int) -> bool:
+def delete_item(item_id: int) -> bool:
     conn = sqlite3.connect(DB_PATH)
     cur = conn.cursor()
-    cur.execute("DELETE FROM jihozlar WHERE id = ? AND user_id = ?", (item_id, user_id))
+    cur.execute("DELETE FROM jihozlar WHERE id = ?", (item_id,))
     conn.commit()
     deleted = cur.rowcount > 0
     conn.close()
@@ -127,7 +110,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    photo = update.message.photo[-1]  # eng yuqori sifatli versiyasi
+    photo = update.message.photo[-1]
     caption = update.message.caption or ""
     user_id = update.effective_user.id
 
@@ -140,13 +123,12 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def qidir(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
     if not context.args:
         await update.message.reply_text("Qidiruv so'zini yozing. Masalan: /qidir Bosch")
         return
 
     query = " ".join(context.args)
-    rows = search_items(query, user_id)
+    rows = search_items(query)
 
     if not rows:
         await update.message.reply_text(f"'{query}' bo'yicha hech narsa topilmadi.")
@@ -159,8 +141,7 @@ async def qidir(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def royxat(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-    rows, total = list_items(user_id)
+    rows, total = list_items()
 
     if total == 0:
         await update.message.reply_text("Hali hech qanday jihoz saqlanmagan.")
@@ -175,13 +156,12 @@ async def royxat(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def ochir(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
     if not context.args or not context.args[0].isdigit():
         await update.message.reply_text("ID raqamini yozing. Masalan: /ochir 5")
         return
 
     item_id = int(context.args[0])
-    if delete_item(item_id, user_id):
+    if delete_item(item_id):
         await update.message.reply_text(f"ID {item_id} o'chirildi.")
     else:
         await update.message.reply_text(f"ID {item_id} topilmadi.")
@@ -190,11 +170,7 @@ async def ochir(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ============ ISHGA TUSHIRISH ============
 def main():
     if BOT_TOKEN == "BU_YERGA_TOKENINGIZNI_YOZING":
-        print(
-            "XATOLIK: BOT_TOKEN kiritilmagan. Fayl ichida BOT_TOKEN o'zgaruvchisiga "
-            "@BotFather bergan tokenni yozing yoki BOT_TOKEN environment variable "
-            "orqali bering."
-        )
+        print("XATOLIK: BOT_TOKEN kiritilmagan.")
         return
 
     init_db()
